@@ -1,0 +1,47 @@
+# ── Service ───────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-healing-service
+  namespace: ai-healing
+  labels:
+    app: ai-healing
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "5000"
+    prometheus.io/path: "/api/metrics"
+spec:
+  type: NodePort
+  selector:
+    app: ai-healing
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+
+      protocol: TCP
+
+---
+# ── NetworkPolicy ─────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-healing-netpol
+  namespace: ai-healing
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-healing
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 5000
+          protocol: TCP
+  egress:
+    - ports:
+        - port: 53       # DNS
+          protocol: UDP
+        - port: 443      # HTTPS (external calls)
+          protocol: TCP

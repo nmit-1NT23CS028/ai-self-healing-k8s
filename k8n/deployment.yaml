@@ -1,0 +1,188 @@
+# ── Namespace ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-healing
+  labels:
+    app.kubernetes.io/managed-by: ai-self-healer
+    environment: production
+
+---
+# ── ConfigMap ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-healing-config
+  namespace: ai-healing
+data:
+  FLASK_ENV: "production"
+  ANOMALY_THRESHOLD: "2.5"
+  HEALING_CONFIDENCE_MIN: "0.87"
+  LOG_LEVEL: "INFO"
+
+---
+# ── Deployment ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-healing-app
+  namespace: ai-healing
+  labels:
+    app: ai-healing
+    version: "2.0"
+    component: dashboard
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    ai-healer/auto-remediate: "true"
+    ai-healer/anomaly-detection: "enabled"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # Zero-downtime deploys
+  selector:
+    matchLabels:
+      app: ai-healing
+  template:
+    metadata:
+      labels:
+        app: ai-healing
+        version: "2.0"
+    spec:
+      # Spread pods across nodes for HA
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: ai-healing
+
+      # Graceful shutdown
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: healing-app
+          image: ai-healing-app:2.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+
+          # Resource management
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # Environment from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: ai-healing-config
+
+          # Liveness — restart if app hangs
+          livenessProbe:
+            httpGet:
+              path: /api/metrics
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          # Readiness — route traffic only when ready
+          readinessProbe:
+            httpGet:
+              path: /api/metrics
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3
+
+          # Startup probe — give app time to initialise
+          startupProbe:
+            httpGet:
+              path: /api/metrics
+              port: 5000
+            failureThreshold: 10
+            periodSeconds: 3
+
+          # Security hardening
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# ── HorizontalPodAutoscaler ───────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-healing-hpa
+  namespace: ai-healing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-healing-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+
+---
+# ── PodDisruptionBudget ───────────────────────────────────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-healing-pdb
+  namespace: ai-healing
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ai-healing
+volumeMounts:
+  - mountPath: /app/data
+    name: flask-storage
+volumes:
+  - name: flask-storage
+    persistentVolumeClaim:
+      claimName: flask-pvc
