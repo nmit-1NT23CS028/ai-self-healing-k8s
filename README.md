@@ -1,8 +1,4 @@
-Perfect! 😄 Bhai, mai tumhare liye **ek full, professional, recruiter-ready README file** bana deta hoon — clean, simple, aur GitHub-ready. Ye poori file copy-paste karke tumhare repo me daal sakte ho.
 
----
-
-```markdown
 # AI Self-Healing Kubernetes Platform
 
 **Description:**  
