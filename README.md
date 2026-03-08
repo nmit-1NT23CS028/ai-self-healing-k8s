@@ -80,40 +80,9 @@ GitHub Actions can automatically:
 3. Deploy Kubernetes manifests
 
 ---
-
-## Supported Anomaly Scenarios (Optional)
-
-| Scenario         | Trigger            | Remediation                       |
-| ---------------- | ------------------ | --------------------------------- |
-| OOMKilled        | Memory > 92%       | Scale memory +25%, restart pod    |
-| CrashLoopBackOff | Repeated exit      | Exponential backoff + probe tweak |
-| CPUThrottle      | CPU > 90%          | HPA scale-out + limit adjustment  |
-| NetworkLatency   | High inter-pod RTT | Sidecar proxy restart + reroute   |
-| DiskPressure     | Node disk full     | PVC expand + log rotation         |
-| NodeNotReady     | Node unreachable   | Cordon + drain + reschedule       |
-
 ---
 
-## API Endpoints
-
-| Method | Endpoint             | Description               |
-| ------ | -------------------- | ------------------------- |
-| GET    | /                    | Live dashboard            |
-| GET    | /api/cluster         | Full cluster state (JSON) |
-| GET    | /api/metrics         | Aggregated metrics        |
-| POST   | /api/trigger-anomaly | Inject failure scenario   |
-
-Example: Trigger OOMKilled anomaly
-
-```bash
-curl -X POST http://localhost:5000/api/trigger-anomaly \
-  -H "Content-Type: application/json" \
-  -d '{"type": "OOMKilled"}'
-```
-
----
-
-## Resume Highlights
+## Highlights
 
 * Dockerized Flask microservice with **self-healing**
 * **Auto-scaling** using Kubernetes HPA
